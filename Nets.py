@@ -8,23 +8,25 @@ from functional import reset_normal_param, LinearWeightNorm
 
 
 class Discriminator(nn.Module):
-    def __init__(self, input_dim=28 ** 2, output_dim=10):
+    def __init__(self, input_dim=96*96*3, output_dim=1000):
         super(Discriminator, self).__init__()
         self.input_dim = input_dim
         self.layers = torch.nn.ModuleList([
-            LinearWeightNorm(input_dim, 1000),
-            LinearWeightNorm(1000, 500),
-            LinearWeightNorm(500, 250),
-            LinearWeightNorm(250, 250),
-            LinearWeightNorm(250, 250)]
+            LinearWeightNorm(input_dim, 5000),
+            LinearWeightNorm(5000, 3000),
+            LinearWeightNorm(3000, 2500),
+            LinearWeightNorm(2500, 2000),
+            LinearWeightNorm(2000, 1000)]
         )
-        self.final = LinearWeightNorm(250, output_dim, weight_scale=1)
+        self.final = LinearWeightNorm(1000, output_dim, weight_scale=1)
         # for layer in self.layers:
         #    reset_normal_param(layer, 0.1)
         # reset_normal_param(self.final, 0.1, 5)
 
     def forward(self, x, feature = False, cuda = False):
+
         x = x.view(-1, self.input_dim)
+
         noise = torch.randn(x.size()) * 0.3 if self.training else torch.Tensor([0])
         if cuda:
             noise = noise.cuda()
@@ -42,25 +44,25 @@ class Discriminator(nn.Module):
 
 
 class Generator(nn.Module):
-    def __init__(self, z_dim, output_dim = 28 ** 2):
+    def __init__(self, z_dim, output_dim = 96*96*3):
         super(Generator, self).__init__()
         self.z_dim = z_dim
-        self.fc1 = nn.Linear(z_dim, 500, bias=False)
-        self.bn1 = nn.BatchNorm1d(500, affine=False, eps=1e-6, momentum=0.5)
-        self.bn1.track_running_stats=1
-        self.fc2 = nn.Linear(500, 500, bias=False)
-        self.bn2 = nn.BatchNorm1d(500, affine=False, eps=1e-6, momentum=0.5)
-        self.bn2.track_running_stats=1
-        self.fc3 = LinearWeightNorm(500, output_dim, weight_scale=1)
-        self.bn1_b = Parameter(torch.zeros(500))
-        self.bn2_b = Parameter(torch.zeros(500))
+        self.fc1 = nn.Linear(z_dim, 2500, bias=False)
+        self.bn1 = nn.BatchNorm1d(2500, affine=False, eps=1e-6, momentum=0.5)
+        # self.bn1.track_running_stats=1
+        self.fc2 = nn.Linear(2500, 5000, bias=False)
+        self.bn2 = nn.BatchNorm1d(5000, affine=False, eps=1e-6, momentum=0.5)
+        # self.bn2.track_running_stats=1
+        self.fc3 = LinearWeightNorm(5000, output_dim, weight_scale=1)
+        self.bn1_b = Parameter(torch.zeros(2500))
+        self.bn2_b = Parameter(torch.zeros(5000))
         nn.init.xavier_uniform_(self.fc1.weight)
         nn.init.xavier_uniform_(self.fc2.weight)
         # reset_normal_param(self.fc1, 0.1)
         # reset_normal_param(self.fc2, 0.1)
         # reset_normal_param(self.fc3, 0.1)
 
-    def forward(self, batch_size, cuda = False):
+    def forward(self, batch_size, cuda = True):
         with torch.no_grad():
             x = Variable(torch.rand(batch_size, self.z_dim), requires_grad=False)
             if cuda:

@@ -17,55 +17,73 @@ import tensorboardX
 import os
 from Data import Data
 import shutil
+import time
 
 
 class ImprovedGAN(object):
-    def __init__(self, G, D, labeled, unlabeled, test, args):
+    # def __init__(self, G, D, labeled, unlabeled, test, args):
+    def __init__(self, G, D, args):
         if os.path.exists(args.savedir):
             if args.load_models:
                 print('Loading model from ' + args.savedir)
                 self.G = torch.load(os.path.join(args.savedir, 'G.pth'))
                 self.D = torch.load(os.path.join(args.savedir, 'D.pth'))
             else:
+                print('Deleting models of ' + args.savedir)
                 shutil.rmtree(args.savedir)
                 os.makedirs(args.savedir)
                 self.G = G
                 self.D = D
                 torch.save(self.G, os.path.join(args.savedir, 'G.pth'))
                 torch.save(self.D, os.path.join(args.savedir, 'D.pth'))
+                print('Creating models in ' + args.savedir)
         else:
+            print('Mkdir ' + args.savedir)
             os.makedirs(args.savedir)
             self.G = G
             self.D = D
             torch.save(self.G, os.path.join(args.savedir, 'G.pth'))
             torch.save(self.D, os.path.join(args.savedir, 'D.pth'))
+            print('Creating models in ' + args.savedir)
+
         self.writer = tensorboardX.SummaryWriter(log_dir=args.logdir)
         if args.cuda:
             self.G.cuda()
             self.D.cuda()
-        self.labeled = labeled
-        self.unlabeled = unlabeled
-        self.test = test
+        # self.labeled = labeled
+        # self.unlabeled = unlabeled
+        # self.test = test
         self.Doptim = optim.Adam(self.D.parameters(), lr=args.lr, betas= (args.momentum, 0.999))
         self.Goptim = optim.Adam(self.G.parameters(), lr=args.lr, betas = (args.momentum,0.999))
         self.args = args
-        self.data = Data(batch_size=64, num_workers=4)
+        self.data = Data(batch_size=args.batch_size, num_workers=8)
 
     def trainD(self, x_label, y, x_unlabel):
         x_label, x_unlabel, y = Variable(x_label), Variable(x_unlabel), Variable(y, requires_grad = False)
         if self.args.cuda:
             x_label, x_unlabel, y = x_label.cuda(), x_unlabel.cuda(), y.cuda()
+
         output_label, output_unlabel, output_fake = self.D(x_label, cuda=self.args.cuda), self.D(x_unlabel, cuda=self.args.cuda), self.D(self.G(x_unlabel.size()[0], cuda = self.args.cuda).view(x_unlabel.size()).detach(), cuda=self.args.cuda)
+
         logz_label, logz_unlabel, logz_fake = log_sum_exp(output_label), log_sum_exp(output_unlabel), log_sum_exp(output_fake) # log ∑e^x_i
-        prob_label = torch.gather(output_label, 1, y.unsqueeze(1)) # log e^x_label = x_label 
+
+        prob_label = torch.gather(output_label, 1, y.unsqueeze(1)) # log e^x_label = x_label
+
         loss_supervised = -torch.mean(prob_label) + torch.mean(logz_label)
+
         loss_unsupervised = 0.5 * (-torch.mean(logz_unlabel) + torch.mean(F.softplus(logz_unlabel)) + # real_data: log Z/(1+Z)
                             torch.mean(F.softplus(logz_fake)) ) # fake_data: log 1/(1+Z)
+
         loss = loss_supervised + self.args.unlabel_weight * loss_unsupervised
+
         acc = torch.mean((output_label.max(1)[1] == y).float())
+
         self.Doptim.zero_grad()
+
         loss.backward()
+
         self.Doptim.step()
+
         return loss_supervised.data.cpu().numpy(), loss_unsupervised.data.cpu().numpy(), acc
     
     def trainG(self, x_unlabel):
@@ -85,66 +103,91 @@ class ImprovedGAN(object):
         return loss.data.cpu().numpy()
 
     def train(self):
-        assert self.unlabeled.__len__() > self.labeled.__len__()
-        assert type(self.labeled) == TensorDataset
-        times = int(np.ceil(self.unlabeled.__len__() * 1. / self.labeled.__len__()))
+        # assert self.unlabeled.__len__() > self.labeled.__len__()
+        # assert type(self.labeled) == TensorDataset
+        # times = int(np.ceil(self.unlabeled.__len__() * 1. / self.labeled.__len__()))
         # t1 = self.labeled.data_tensor.clone()
-        t1 = self.labeled.tensors[0].clone()
+        # t1 = self.labeled.tensors[0].clone()
         # t2 = self.labeled.target_tensor.clone()
-        t2 = self.labeled.tensors[1].clone()
+        # t2 = self.labeled.tensors[1].clone()
 
-        tile_labeled = TensorDataset(t1.repeat(times, 1, 1, 1), t2.repeat(times))
+        # tile_labeled = TensorDataset(t1.repeat(times, 1, 1, 1), t2.repeat(times))
         # tile_labeled = TensorDataset(t1, t2)
         gn = 0
+
+        # replace the mnist with our data
+
+        label_loader = self.data.load_train_data_sup(transform=transforms.ToTensor()).__iter__()
+        unlabel_loader1 = self.data.load_train_data_mix(transform=transforms.ToTensor())
+        # unlabel_loader2 = self.data.load_train_data_mix(transform=transforms.ToTensor()).__iter__()
+        unlabel_loader2 = unlabel_loader1.__iter__()
+
         for epoch in range(self.args.epochs):
             self.G.train()
             self.D.train()
-
-            unlabel_loader1 = DataLoader(self.unlabeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4)
-            unlabel_loader2 = DataLoader(self.unlabeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
-            label_loader = DataLoader(tile_labeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
-
-            # TODO: replace the above code with our data
+            start = time.time()
+            # unlabel_loader1 = DataLoader(self.unlabeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4)
+            # unlabel_loader2 = DataLoader(self.unlabeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
+            # label_loader = DataLoader(tile_labeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
 
             loss_supervised = loss_unsupervised = loss_gen = accuracy = 0.
             batch_num = 0
-            for (unlabel1, _label1) in unlabel_loader1:
+            for batch_num, (unlabel1, _label1) in enumerate(unlabel_loader1):
                 #  pdb.set_trace()
-                batch_num += 1
+
                 unlabel2, _label2 = unlabel_loader2.next()
                 x, y = label_loader.next()
+
                 if args.cuda:
                     x, y, unlabel1, unlabel2 = x.cuda(), y.cuda(), unlabel1.cuda(), unlabel2.cuda()
+
                 ll, lu, acc = self.trainD(x, y, unlabel1)
+
                 loss_supervised += ll
+
                 loss_unsupervised += lu
+
                 accuracy += acc
+
                 lg = self.trainG(unlabel2)
+
                 if epoch > 1 and lg > 1:
                     # pdb.set_trace()
                     lg = self.trainG(unlabel2)
+
                 loss_gen += lg
+
                 if (batch_num + 1) % self.args.log_interval == 0:
-                    print('Training: %d / %d' % (batch_num + 1, len(unlabel_loader1)))
+                    print('Training: %d batch / %d total batches, %d Images' % (batch_num + 1, len(unlabel_loader1), (batch_num+1)*args.batch_size ))
                     gn += 1
+
                     self.writer.add_scalars('loss', {'loss_supervised':ll, 'loss_unsupervised':lu, 'loss_gen':lg}, gn)
+
                     with torch.no_grad():
                         self.writer.add_histogram('real_feature', self.D(Variable(x), cuda=self.args.cuda, feature = True)[0], gn)
+
                     self.writer.add_histogram('fake_feature', self.D(self.G(self.args.batch_size, cuda = self.args.cuda), cuda=self.args.cuda, feature = True)[0], gn)
                     self.writer.add_histogram('fc3_bias', self.G.fc3.bias, gn)
                     self.writer.add_histogram('D_feature_weight', self.D.layers[-1].weight, gn)
                     # self.writer.add_histogram('D_feature_bias', self.D.layers[-1].bias, gn)
                     # print('Eval: correct %d/%d, %.4f' % (self.eval(), self.test.__len__(), acc))
+
                     self.D.train()
                     self.G.train()
+
             loss_supervised /= batch_num
             loss_unsupervised /= batch_num
             loss_gen /= batch_num
             accuracy /= batch_num
-            print("Iteration %d, loss_supervised = %.4f, loss_unsupervised = %.4f, loss_gen = %.4f train acc = %.4f" % (epoch, loss_supervised, loss_unsupervised, loss_gen, accuracy))
+
+            end = time.time()
+
+            print("Iteration %d, loss_supervised = %.4f, loss_unsupervised = %.4f, loss_gen = %.4f train acc = %.4f; Using time %.2f min" % (epoch, loss_supervised, loss_unsupervised, loss_gen, accuracy, (end-start)/60))
+
             sys.stdout.flush()
+
             if (epoch + 1) % self.args.eval_interval == 0:
-                print("Eval: correct %d / %d"  % (self.eval(), self.test.__len__()))
+                print("Eval: correct %d / %d" % (self.eval(), self.test.__len__()))
                 torch.save(self.G, os.path.join(args.savedir, 'G.pth'))
                 torch.save(self.D, os.path.join(args.savedir, 'D.pth'))
 
@@ -154,7 +197,8 @@ class ImprovedGAN(object):
     def eval(self):
         self.G.eval()
         self.D.eval()
-        d, l = [], []
+        d = []
+        l = []
         for (datum, label) in self.test:
             d.append(datum)
             l.append(label)
@@ -173,7 +217,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Improved GAN')
     parser.add_argument('--load-models', type=bool, default=True,
                         help='load trained models (default: True)')
-    parser.add_argument('--batch-size', type=int, default=100, metavar='N',
+    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of epochs to train (default: 10)')
@@ -185,7 +229,7 @@ if __name__ == '__main__':
                         help='CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=100, metavar='N',
+    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--eval-interval', type=int, default=1, metavar='N',
                         help='how many batches to wait before evaling training status')
@@ -195,7 +239,11 @@ if __name__ == '__main__':
     parser.add_argument('--savedir', type=str, default='./models', metavar='SAVE_PATH', help='saving path, pickle format')
     args = parser.parse_args()
     args.cuda = args.cuda and torch.cuda.is_available()
+    if args.cuda:
+        print("Training with GPU")
+
     np.random.seed(args.seed)
-    gan = ImprovedGAN(Generator(100), Discriminator(), MnistLabel(10), MnistUnlabel(), MnistTest(), args)
+    # gan = ImprovedGAN(Generator(100), Discriminator(), MnistLabel(10), MnistUnlabel(), MnistTest(), args)
+    gan = ImprovedGAN(Generator(1000), Discriminator(), args)
     gan.train()
 
