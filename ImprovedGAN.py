@@ -129,8 +129,8 @@ class ImprovedGAN(object):
             sys.stdout.flush()
             if (epoch + 1) % self.args.eval_interval == 0:
                 print("Eval: correct %d / %d"  % (self.eval(), self.test.__len__()))
-                torch.save(self.G, os.path.join(args.savedir, 'G.pkl'))
-                torch.save(self.D, os.path.join(args.savedir, 'D.pkl'))
+                torch.save(self.G, os.path.join(args.savedir, 'G.pth'))
+                torch.save(self.D, os.path.join(args.savedir, 'D.pth'))
 
     def predict(self, x):
         return torch.max(self.D(Variable(x, volatile=True), cuda=self.args.cuda), 1)[1].data
