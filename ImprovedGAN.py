@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 from functional import log_sum_exp
-from torch.utils.data import DataLoader,TensorDataset
+from torch.utils.data import DataLoader, TensorDataset
 import sys
 import argparse
 from Nets import Generator, Discriminator
@@ -15,6 +15,8 @@ from Datasets import *
 import pdb
 import tensorboardX
 import os
+
+
 class ImprovedGAN(object):
     def __init__(self, G, D, labeled, unlabeled, test, args):
         if os.path.exists(args.savedir):
@@ -37,6 +39,7 @@ class ImprovedGAN(object):
         self.Doptim = optim.Adam(self.D.parameters(), lr=args.lr, betas= (args.momentum, 0.999))
         self.Goptim = optim.Adam(self.G.parameters(), lr=args.lr, betas = (args.momentum,0.999))
         self.args = args
+
     def trainD(self, x_label, y, x_unlabel):
         x_label, x_unlabel, y = Variable(x_label), Variable(x_unlabel), Variable(y, requires_grad = False)
         if self.args.cuda:
@@ -45,7 +48,7 @@ class ImprovedGAN(object):
         logz_label, logz_unlabel, logz_fake = log_sum_exp(output_label), log_sum_exp(output_unlabel), log_sum_exp(output_fake) # log ∑e^x_i
         prob_label = torch.gather(output_label, 1, y.unsqueeze(1)) # log e^x_label = x_label 
         loss_supervised = -torch.mean(prob_label) + torch.mean(logz_label)
-        loss_unsupervised = 0.5 * (-torch.mean(logz_unlabel) + torch.mean(F.softplus(logz_unlabel))  + # real_data: log Z/(1+Z)
+        loss_unsupervised = 0.5 * (-torch.mean(logz_unlabel) + torch.mean(F.softplus(logz_unlabel)) + # real_data: log Z/(1+Z)
                             torch.mean(F.softplus(logz_fake)) ) # fake_data: log 1/(1+Z)
         loss = loss_supervised + self.args.unlabel_weight * loss_unsupervised
         acc = torch.mean((output_label.max(1)[1] == y).float())
@@ -59,11 +62,11 @@ class ImprovedGAN(object):
 #        fake.retain_grad()
         mom_gen, output_fake = self.D(fake, feature=True, cuda=self.args.cuda)
         mom_unlabel, _ = self.D(Variable(x_unlabel), feature=True, cuda=self.args.cuda)
-        mom_gen = torch.mean(mom_gen, dim = 0)
-        mom_unlabel = torch.mean(mom_unlabel, dim = 0)
+        mom_gen = torch.mean(mom_gen, dim=0)
+        mom_unlabel = torch.mean(mom_unlabel, dim=0)
         loss_fm = torch.mean((mom_gen - mom_unlabel) ** 2)
-        #loss_adv = -torch.mean(F.softplus(log_sum_exp(output_fake)))
-        loss = loss_fm #+ 1. * loss_adv        
+        # loss_adv = -torch.mean(F.softplus(log_sum_exp(output_fake)))
+        loss = loss_fm # + 1. * loss_adv
         self.Goptim.zero_grad()
         self.Doptim.zero_grad()
         loss.backward()
@@ -74,20 +77,23 @@ class ImprovedGAN(object):
         assert self.unlabeled.__len__() > self.labeled.__len__()
         assert type(self.labeled) == TensorDataset
         times = int(np.ceil(self.unlabeled.__len__() * 1. / self.labeled.__len__()))
-        t1 = self.labeled.data_tensor.clone()
-        t2 = self.labeled.target_tensor.clone()
-        tile_labeled = TensorDataset(t1.repeat(times,1,1,1),t2.repeat(times))
+        # t1 = self.labeled.data_tensor.clone()
+        t1 = self.labeled.tensors[0].clone()
+        # t2 = self.labeled.target_tensor.clone()
+        t2 = self.labeled.tensors[1].clone()
+
+        tile_labeled = TensorDataset(t1.repeat(times, 1, 1, 1), t2.repeat(times))
         gn = 0
         for epoch in range(self.args.epochs):
             self.G.train()
             self.D.train()
-            unlabel_loader1 = DataLoader(self.unlabeled, batch_size = self.args.batch_size, shuffle=True, drop_last=True, num_workers = 4)
-            unlabel_loader2 = DataLoader(self.unlabeled, batch_size = self.args.batch_size, shuffle=True, drop_last=True, num_workers = 4).__iter__()
-            label_loader = DataLoader(tile_labeled, batch_size = self.args.batch_size, shuffle=True, drop_last=True, num_workers = 4).__iter__()
+            unlabel_loader1 = DataLoader(self.unlabeled, batch_size = self.args.batch_size, shuffle=True, drop_last=True, num_workers=4)
+            unlabel_loader2 = DataLoader(self.unlabeled, batch_size = self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
+            label_loader = DataLoader(tile_labeled, batch_size = self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
             loss_supervised = loss_unsupervised = loss_gen = accuracy = 0.
             batch_num = 0
             for (unlabel1, _label1) in unlabel_loader1:
-#                pdb.set_trace()
+                #  pdb.set_trace()
                 batch_num += 1
                 unlabel2, _label2 = unlabel_loader2.next()
                 x, y = label_loader.next()
@@ -99,7 +105,7 @@ class ImprovedGAN(object):
                 accuracy += acc
                 lg = self.trainG(unlabel2)
                 if epoch > 1 and lg > 1:
-#                    pdb.set_trace()
+                    # pdb.set_trace()
                     lg = self.trainG(unlabel2)
                 loss_gen += lg
                 if (batch_num + 1) % self.args.log_interval == 0:
@@ -110,8 +116,8 @@ class ImprovedGAN(object):
                     self.writer.add_histogram('fake_feature', self.D(self.G(self.args.batch_size, cuda = self.args.cuda), cuda=self.args.cuda, feature = True)[0], gn)
                     self.writer.add_histogram('fc3_bias', self.G.fc3.bias, gn)
                     self.writer.add_histogram('D_feature_weight', self.D.layers[-1].weight, gn)
-#                    self.writer.add_histogram('D_feature_bias', self.D.layers[-1].bias, gn)
-                    #print('Eval: correct %d/%d, %.4f' % (self.eval(), self.test.__len__(), acc))
+                    # self.writer.add_histogram('D_feature_bias', self.D.layers[-1].bias, gn)
+                    # print('Eval: correct %d/%d, %.4f' % (self.eval(), self.test.__len__(), acc))
                     self.D.train()
                     self.G.train()
             loss_supervised /= batch_num
@@ -124,10 +130,10 @@ class ImprovedGAN(object):
                 print("Eval: correct %d / %d"  % (self.eval(), self.test.__len__()))
                 torch.save(self.G, os.path.join(args.savedir, 'G.pkl'))
                 torch.save(self.D, os.path.join(args.savedir, 'D.pkl'))
-                
 
     def predict(self, x):
         return torch.max(self.D(Variable(x, volatile=True), cuda=self.args.cuda), 1)[1].data
+
     def eval(self):
         self.G.eval()
         self.D.eval()
@@ -140,9 +146,21 @@ class ImprovedGAN(object):
             x, y = x.cuda(), y.cuda()
         pred = self.predict(x)
         return torch.sum(pred == y)
+
     def draw(self, batch_size):
         self.G.eval()
         return self.G(batch_size, cuda=self.args.cuda)
+
+
+def recursion_change_bn(module):
+    if isinstance(module, torch.nn.BatchNorm2d):
+        module.track_running_stats = 1
+    else:
+        for i, (name, module1) in enumerate(module._modules.items()):
+            module1 = recursion_change_bn(module1)
+    return module
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Improved GAN')
     parser.add_argument('--batch-size', type=int, default=100, metavar='N',
@@ -153,7 +171,7 @@ if __name__ == '__main__':
                         help='learning rate (default: 0.003)')
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
                         help='SGD momentum (default: 0.5)')
-    parser.add_argument('--cuda', action='store_true', default=False,
+    parser.add_argument('--cuda', action='store_true', default=True,
                         help='CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S',
                         help='random seed (default: 1)')
@@ -164,10 +182,12 @@ if __name__ == '__main__':
     parser.add_argument('--unlabel-weight', type=float, default=1, metavar='N',
                         help='scale factor between labeled and unlabeled data')
     parser.add_argument('--logdir', type=str, default='./logfile', metavar='LOG_PATH', help='logfile path, tensorboard format')
-    parser.add_argument('--savedir', type=str, default='./models', metavar='SAVE_PATH', help = 'saving path, pickle format')
+    parser.add_argument('--savedir', type=str, default='./models', metavar='SAVE_PATH', help='saving path, pickle format')
     args = parser.parse_args()
     args.cuda = args.cuda and torch.cuda.is_available()
     np.random.seed(args.seed)
     gan = ImprovedGAN(Generator(100), Discriminator(), MnistLabel(10), MnistUnlabel(), MnistTest(), args)
+
+    recursion_change_bn(gan)
     gan.train()
-    
+
