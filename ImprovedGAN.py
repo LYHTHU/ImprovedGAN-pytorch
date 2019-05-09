@@ -119,8 +119,8 @@ class ImprovedGAN(object):
 
         label_loader = self.data.load_train_data_sup(transform=transforms.ToTensor()).__iter__()
         unlabel_loader1 = self.data.load_train_data_mix(transform=transforms.ToTensor())
-        # unlabel_loader2 = self.data.load_train_data_mix(transform=transforms.ToTensor()).__iter__()
-        unlabel_loader2 = unlabel_loader1.__iter__()
+        unlabel_loader2 = self.data.load_train_data_mix(transform=transforms.ToTensor()).__iter__()
+        # unlabel_loader2 = unlabel_loader1.__iter__()
 
         for epoch in range(self.args.epochs):
             self.G.train()
@@ -217,7 +217,7 @@ class ImprovedGAN(object):
 
 
 if __name__ == '__main__':
-    torch.cuda
+    torch.cuda.empty_cache()
     parser = argparse.ArgumentParser(description='PyTorch Improved GAN')
     parser.add_argument('--load-models', type=bool, default=True,
                         help='load trained models (default: True)')
@@ -248,6 +248,6 @@ if __name__ == '__main__':
 
     np.random.seed(args.seed)
     # gan = ImprovedGAN(Generator(100), Discriminator(), MnistLabel(10), MnistUnlabel(), MnistTest(), args)
-    gan = ImprovedGAN(Generator(1000), Discriminator(), args)
+    gan = ImprovedGAN(Generator(14*14*16), Discriminator(), args)
     gan.train()
 
