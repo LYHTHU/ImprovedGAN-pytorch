@@ -5,24 +5,6 @@ from torch.nn import functional as F
 from torch.autograd import Variable
 import pdb
 from functional import reset_normal_param, LinearWeightNorm
-# class Discriminator(nn.Module):
-#     def __init__(self, output_units = 10):
-#         super(Discriminator, self).__init__()
-#         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
-#         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-#         self.conv2_drop = nn.Dropout2d()
-#         self.fc1 = nn.Linear(320, 100)
-#         self.fc2 = nn.Linear(100, output_units)
-
-#     def forward(self, x, feature = False, cuda = False):
-#         x = F.leaky_relu(F.max_pool2d(self.conv1(x), 2))
-#         x = F.leaky_relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
-#         x = x.view(-1, 320)
-#         x_f = self.fc1(x)
-#         x = F.leaky_relu(x_f)
-#         x = F.dropout(x, training=self.training)
-#         x = self.fc2(x)
-#         return x if not feature else x_f
 
 
 class Discriminator(nn.Module):
@@ -89,7 +71,27 @@ class Generator(nn.Module):
             return x
 
 
-#class Discriminator(nn.Module):
+# class Discriminator(nn.Module):
+#     def __init__(self, output_units = 10):
+#         super(Discriminator, self).__init__()
+#         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
+#         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
+#         self.conv2_drop = nn.Dropout2d()
+#         self.fc1 = nn.Linear(320, 100)
+#         self.fc2 = nn.Linear(100, output_units)
+
+#     def forward(self, x, feature = False, cuda = False):
+#         x = F.leaky_relu(F.max_pool2d(self.conv1(x), 2))
+#         x = F.leaky_relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
+#         x = x.view(-1, 320)
+#         x_f = self.fc1(x)
+#         x = F.leaky_relu(x_f)
+#         x = F.dropout(x, training=self.training)
+#         x = self.fc2(x)
+#         return x if not feature else x_f
+
+
+# class Discriminator(nn.Module):
 #    def __init__(self, nc = 1, ndf = 64, output_units = 10):
 #        super(Discriminator, self).__init__()
 #        self.ndf = ndf
@@ -114,7 +116,8 @@ class Generator(nn.Module):
 #        x_f = self.main(x).view(-1, self.ndf * 4)
 #        return x_f if feature else self.final(x_f)
 
-#class Generator(nn.Module):
+
+# class Generator(nn.Module):
 #    def __init__(self, z_dim, ngf = 64, output_dim = 28 ** 2):
 #        super(Generator, self).__init__()
 #        self.z_dim = z_dim

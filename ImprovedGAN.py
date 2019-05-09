@@ -15,6 +15,7 @@ from Datasets import *
 import pdb
 import tensorboardX
 import os
+from Data import Data
 
 
 class ImprovedGAN(object):
@@ -39,6 +40,7 @@ class ImprovedGAN(object):
         self.Doptim = optim.Adam(self.D.parameters(), lr=args.lr, betas= (args.momentum, 0.999))
         self.Goptim = optim.Adam(self.G.parameters(), lr=args.lr, betas = (args.momentum,0.999))
         self.args = args
+        self.data = Data(batch_size=64, num_workers=4)
 
     def trainD(self, x_label, y, x_unlabel):
         x_label, x_unlabel, y = Variable(x_label), Variable(x_unlabel), Variable(y, requires_grad = False)
@@ -87,9 +89,13 @@ class ImprovedGAN(object):
         for epoch in range(self.args.epochs):
             self.G.train()
             self.D.train()
-            unlabel_loader1 = DataLoader(self.unlabeled, batch_size = self.args.batch_size, shuffle=True, drop_last=True, num_workers=4)
-            unlabel_loader2 = DataLoader(self.unlabeled, batch_size = self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
-            label_loader = DataLoader(tile_labeled, batch_size = self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
+
+            unlabel_loader1 = DataLoader(self.unlabeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4)
+            unlabel_loader2 = DataLoader(self.unlabeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
+            label_loader = DataLoader(tile_labeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
+
+            # TODO: replace the above code with our data
+
             loss_supervised = loss_unsupervised = loss_gen = accuracy = 0.
             batch_num = 0
             for (unlabel1, _label1) in unlabel_loader1:
