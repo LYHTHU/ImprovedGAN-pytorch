@@ -63,7 +63,7 @@ class ImprovedGAN(object):
         if self.args.cuda:
             x_label, x_unlabel, y = x_label.cuda(), x_unlabel.cuda(), y.cuda()
 
-        output_label, output_unlabel, output_fake = self.D(x_label, cuda=self.args.cuda), self.D(x_unlabel, cuda=self.args.cuda), self.D(self.G(x_unlabel.size()[0], cuda = self.args.cuda).view(x_unlabel.size()).detach(), cuda=self.args.cuda)
+        output_label, output_unlabel, output_fake = self.D(x_label, cuda=self.args.cuda), self.D(x_unlabel, cuda=self.args.cuda), self.D(self.G(x_unlabel.size()[0], cuda=self.args.cuda).view(x_unlabel.size()).detach(), cuda=self.args.cuda)
 
         logz_label, logz_unlabel, logz_fake = log_sum_exp(output_label), log_sum_exp(output_unlabel), log_sum_exp(output_fake) # log ∑e^x_i
 
@@ -95,7 +95,7 @@ class ImprovedGAN(object):
         mom_unlabel = torch.mean(mom_unlabel, dim=0)
         loss_fm = torch.mean((mom_gen - mom_unlabel) ** 2)
         # loss_adv = -torch.mean(F.softplus(log_sum_exp(output_fake)))
-        loss = loss_fm # + 1. * loss_adv
+        loss = loss_fm  # + 1. * loss_adv
         self.Goptim.zero_grad()
         self.Doptim.zero_grad()
         loss.backward()
@@ -126,9 +126,12 @@ class ImprovedGAN(object):
             self.G.train()
             self.D.train()
             start = time.time()
-            # unlabel_loader1 = DataLoader(self.unlabeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4)
-            # unlabel_loader2 = DataLoader(self.unlabeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
-            # label_loader = DataLoader(tile_labeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True, num_workers=4).__iter__()
+            # unlabel_loader1 = DataLoader(self.unlabeled, batch_size=self.args.batch_size, shuffle=True,
+            # drop_last=True, num_workers=4)
+            # unlabel_loader2 = DataLoader(self.unlabeled, batch_size=self.args.batch_size, shuffle=True,
+            # drop_last=True, num_workers=4).__iter__()
+            # label_loader = DataLoader(tile_labeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True,
+            # num_workers=4).__iter__()
 
             loss_supervised = loss_unsupervised = loss_gen = accuracy = 0.
             batch_num = 0
@@ -214,6 +217,7 @@ class ImprovedGAN(object):
 
 
 if __name__ == '__main__':
+    torch.cuda
     parser = argparse.ArgumentParser(description='PyTorch Improved GAN')
     parser.add_argument('--load-models', type=bool, default=True,
                         help='load trained models (default: True)')

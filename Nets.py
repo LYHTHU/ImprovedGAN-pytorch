@@ -23,10 +23,8 @@ class Discriminator(nn.Module):
         #    reset_normal_param(layer, 0.1)
         # reset_normal_param(self.final, 0.1, 5)
 
-    def forward(self, x, feature = False, cuda = False):
-
+    def forward(self, x, feature = False, cuda = True):
         x = x.view(-1, self.input_dim)
-
         noise = torch.randn(x.size()) * 0.3 if self.training else torch.Tensor([0])
         if cuda:
             noise = noise.cuda()
@@ -63,14 +61,13 @@ class Generator(nn.Module):
         # reset_normal_param(self.fc3, 0.1)
 
     def forward(self, batch_size, cuda = True):
-        with torch.no_grad():
-            x = Variable(torch.rand(batch_size, self.z_dim), requires_grad=False)
-            if cuda:
-                x = x.cuda()
-            x = F.softplus(self.bn1(self.fc1(x)) + self.bn1_b)
-            x = F.softplus(self.bn2(self.fc2(x)) + self.bn2_b)
-            x = F.softplus(self.fc3(x))
-            return x
+        x = Variable(torch.rand(batch_size, self.z_dim), requires_grad=False)
+        if cuda:
+            x = x.cuda()
+        x = F.softplus(self.bn1(self.fc1(x)) + self.bn1_b)
+        x = F.softplus(self.bn2(self.fc2(x)) + self.bn2_b)
+        x = F.softplus(self.fc3(x))
+        return x
 
 
 # class Discriminator(nn.Module):
