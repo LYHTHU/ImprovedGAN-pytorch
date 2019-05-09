@@ -37,6 +37,7 @@ def MnistUnlabel():
     return raw_dataset
 # track_running_stats=1
 
+
 def MnistTest():
     return datasets.MNIST('../data', train=False, download=True,
                    transform=transforms.Compose([

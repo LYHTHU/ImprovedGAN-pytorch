@@ -16,14 +16,23 @@ import pdb
 import tensorboardX
 import os
 from Data import Data
+import shutil
 
 
 class ImprovedGAN(object):
     def __init__(self, G, D, labeled, unlabeled, test, args):
         if os.path.exists(args.savedir):
-            print('Loading model from ' + args.savedir)
-            self.G = torch.load(os.path.join(args.savedir, 'G.pth'))
-            self.D = torch.load(os.path.join(args.savedir, 'D.pth'))
+            if args.load_models:
+                print('Loading model from ' + args.savedir)
+                self.G = torch.load(os.path.join(args.savedir, 'G.pth'))
+                self.D = torch.load(os.path.join(args.savedir, 'D.pth'))
+            else:
+                shutil.rmtree(args.savedir)
+                os.makedirs(args.savedir)
+                self.G = G
+                self.D = D
+                torch.save(self.G, os.path.join(args.savedir, 'G.pth'))
+                torch.save(self.D, os.path.join(args.savedir, 'D.pth'))
         else:
             os.makedirs(args.savedir)
             self.G = G
@@ -85,6 +94,7 @@ class ImprovedGAN(object):
         t2 = self.labeled.tensors[1].clone()
 
         tile_labeled = TensorDataset(t1.repeat(times, 1, 1, 1), t2.repeat(times))
+        # tile_labeled = TensorDataset(t1, t2)
         gn = 0
         for epoch in range(self.args.epochs):
             self.G.train()
@@ -161,6 +171,8 @@ class ImprovedGAN(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Improved GAN')
+    parser.add_argument('--load-models', type=bool, default=True,
+                        help='load trained models (default: True)')
     parser.add_argument('--batch-size', type=int, default=100, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
