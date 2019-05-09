@@ -21,14 +21,14 @@ class ImprovedGAN(object):
     def __init__(self, G, D, labeled, unlabeled, test, args):
         if os.path.exists(args.savedir):
             print('Loading model from ' + args.savedir)
-            self.G = torch.load(os.path.join(args.savedir, 'G.pkl'))
-            self.D = torch.load(os.path.join(args.savedir, 'D.pkl'))
+            self.G = torch.load(os.path.join(args.savedir, 'G.pth'))
+            self.D = torch.load(os.path.join(args.savedir, 'D.pth'))
         else:
             os.makedirs(args.savedir)
             self.G = G
             self.D = D
-            torch.save(self.G, os.path.join(args.savedir, 'G.pkl'))
-            torch.save(self.D, os.path.join(args.savedir, 'D.pkl'))
+            torch.save(self.G, os.path.join(args.savedir, 'G.pth'))
+            torch.save(self.D, os.path.join(args.savedir, 'D.pth'))
         self.writer = tensorboardX.SummaryWriter(log_dir=args.logdir)
         if args.cuda:
             self.G.cuda()
@@ -112,7 +112,8 @@ class ImprovedGAN(object):
                     print('Training: %d / %d' % (batch_num + 1, len(unlabel_loader1)))
                     gn += 1
                     self.writer.add_scalars('loss', {'loss_supervised':ll, 'loss_unsupervised':lu, 'loss_gen':lg}, gn)
-                    self.writer.add_histogram('real_feature', self.D(Variable(x, volatile = True), cuda=self.args.cuda, feature = True)[0], gn)
+                    with torch.no_grad():
+                        self.writer.add_histogram('real_feature', self.D(Variable(x), cuda=self.args.cuda, feature = True)[0], gn)
                     self.writer.add_histogram('fake_feature', self.D(self.G(self.args.batch_size, cuda = self.args.cuda), cuda=self.args.cuda, feature = True)[0], gn)
                     self.writer.add_histogram('fc3_bias', self.G.fc3.bias, gn)
                     self.writer.add_histogram('D_feature_weight', self.D.layers[-1].weight, gn)
@@ -152,15 +153,6 @@ class ImprovedGAN(object):
         return self.G(batch_size, cuda=self.args.cuda)
 
 
-def recursion_change_bn(module):
-    if isinstance(module, torch.nn.BatchNorm2d):
-        module.track_running_stats = 1
-    else:
-        for i, (name, module1) in enumerate(module._modules.items()):
-            module1 = recursion_change_bn(module1)
-    return module
-
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Improved GAN')
     parser.add_argument('--batch-size', type=int, default=100, metavar='N',
@@ -187,7 +179,5 @@ if __name__ == '__main__':
     args.cuda = args.cuda and torch.cuda.is_available()
     np.random.seed(args.seed)
     gan = ImprovedGAN(Generator(100), Discriminator(), MnistLabel(10), MnistUnlabel(), MnistTest(), args)
-
-    recursion_change_bn(gan)
     gan.train()
 

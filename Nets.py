@@ -65,25 +65,28 @@ class Generator(nn.Module):
         self.z_dim = z_dim
         self.fc1 = nn.Linear(z_dim, 500, bias=False)
         self.bn1 = nn.BatchNorm1d(500, affine=False, eps=1e-6, momentum=0.5)
+        self.bn1.track_running_stats=1
         self.fc2 = nn.Linear(500, 500, bias=False)
         self.bn2 = nn.BatchNorm1d(500, affine=False, eps=1e-6, momentum=0.5)
+        self.bn2.track_running_stats=1
         self.fc3 = LinearWeightNorm(500, output_dim, weight_scale=1)
         self.bn1_b = Parameter(torch.zeros(500))
         self.bn2_b = Parameter(torch.zeros(500))
-        nn.init.xavier_uniform(self.fc1.weight)
-        nn.init.xavier_uniform(self.fc2.weight)
+        nn.init.xavier_uniform_(self.fc1.weight)
+        nn.init.xavier_uniform_(self.fc2.weight)
         # reset_normal_param(self.fc1, 0.1)
         # reset_normal_param(self.fc2, 0.1)
         # reset_normal_param(self.fc3, 0.1)
 
     def forward(self, batch_size, cuda = False):
-        x = Variable(torch.rand(batch_size, self.z_dim), requires_grad=False, volatile=not self.training)
-        if cuda:
-            x = x.cuda()
-        x = F.softplus(self.bn1(self.fc1(x)) + self.bn1_b)
-        x = F.softplus(self.bn2(self.fc2(x)) + self.bn2_b)
-        x = F.softplus(self.fc3(x))
-        return x
+        with torch.no_grad():
+            x = Variable(torch.rand(batch_size, self.z_dim), requires_grad=False)
+            if cuda:
+                x = x.cuda()
+            x = F.softplus(self.bn1(self.fc1(x)) + self.bn1_b)
+            x = F.softplus(self.bn2(self.fc2(x)) + self.bn2_b)
+            x = F.softplus(self.fc3(x))
+            return x
 
 
 #class Discriminator(nn.Module):
