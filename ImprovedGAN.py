@@ -178,7 +178,7 @@ class ImprovedGAN(object):
                     # self.writer.add_histogram('fc3_bias', self.G.fc3.bias, gn)
                     # self.writer.add_histogram('D_feature_weight', self.D.layers[-1].weight, gn)
                     # self.writer.add_histogram('D_feature_bias', self.D.layers[-1].bias, gn)
-                    # print('Eval: correct %d/%d, %.4f' % (self.eval(), self.test.__len__(), acc))
+                    # print('Eval: correct %d/%d, %.4f' % (self.eval(), self.test.dataset.__len__(), acc))
 
                     self.D.train()
                     self.G.train()
@@ -195,9 +195,9 @@ class ImprovedGAN(object):
             sys.stdout.flush()
 
             if (epoch + 1) % self.args.eval_interval == 0:
-                print("Eval: correct %d / %d" % (self.eval(), self.test.__len__()))
                 torch.save(self.G, os.path.join(args.savedir, 'G.pth'))
                 torch.save(self.D, os.path.join(args.savedir, 'D.pth'))
+                print("Eval: correct %d / %d" % (self.eval(), self.test.dataset.__len__()))
 
     def predict(self, x):
         return torch.max(self.D(Variable(x, volatile=True), cuda=self.args.cuda), 1)[1].data
@@ -205,16 +205,29 @@ class ImprovedGAN(object):
     def eval(self):
         self.G.eval()
         self.D.eval()
-        d = []
-        l = []
-        for (datum, label) in self.test:
-            d.append(datum)
-            l.append(label)
-        x, y = torch.stack(d), torch.LongTensor(l)
-        if self.args.cuda:
-            x, y = x.cuda(), y.cuda()
-        pred = self.predict(x)
-        return torch.sum(pred == y)
+        # d = []
+        # l = []
+        # for (datum, label) in self.test:
+        #     d.append(datum)
+        #     l.append(label)
+        # x, y = torch.stack(d), torch.LongTensor(l)
+        # if self.args.cuda:
+        #     x, y = x.cuda(), y.cuda()
+        # pred = self.predict(x)
+
+        num_correct = 0
+        with torch.no_grad():
+            for data, target in self.test:
+                if self.args.cuda:
+                    data, target = data.cuda(), target.cuda()
+                    pred = self.predict(data)
+                    num_correct += pred.eq(target.data.view_as(pred)).cpu().sum().item()
+
+        print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
+             num_correct, len(self.test.dataset),
+            100. * num_correct / len(self.test.dataset)))
+
+        return num_correct
 
     def draw(self, batch_size):
         self.G.eval()
@@ -255,3 +268,4 @@ if __name__ == '__main__':
     # gan = ImprovedGAN(Generator(100), Discriminator(), MnistLabel(10), MnistUnlabel(), MnistTest(), args)
     gan = ImprovedGAN(Generator(z_dim=1), Discriminator(), args)
     gan.train()
+    print(gan.eval() / gan.test.dataset.__len__())
