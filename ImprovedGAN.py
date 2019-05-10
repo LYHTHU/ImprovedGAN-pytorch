@@ -54,6 +54,7 @@ class ImprovedGAN(object):
         # self.unlabeled = unlabeled
         self.Doptim = optim.Adam(self.D.parameters(), lr=args.lr, betas= (args.momentum, 0.999))
         self.Goptim = optim.Adam(self.G.parameters(), lr=args.lr, betas = (args.momentum,0.999))
+        # self.Goptim = optim.Adam(self.G.parameters(), lr=args.lr*5, betas=(args.momentum, 0.999))
         self.args = args
         self.data = Data(batch_size=args.batch_size, num_workers=8)
 
@@ -117,7 +118,7 @@ class ImprovedGAN(object):
         gn = 0
 
         # replace the mnist with our data
-
+        last_acc = 0
         for epoch in range(self.args.epochs):
             self.G.train()
             self.D.train()
@@ -195,9 +196,13 @@ class ImprovedGAN(object):
             sys.stdout.flush()
 
             if (epoch + 1) % self.args.eval_interval == 0:
-                torch.save(self.G, os.path.join(args.savedir, 'G.pth'))
-                torch.save(self.D, os.path.join(args.savedir, 'D.pth'))
-                print("Eval: correct %d / %d" % (self.eval(), self.test.dataset.__len__()))
+                num_correct = self.eval()
+                print("Eval: correct %d / %d" % (num_correct, self.test.dataset.__len__()))
+                acc = num_correct / len(self.test.dataset)
+                if acc > last_acc:
+                    last_acc = acc
+                    torch.save(self.G, os.path.join(args.savedir, 'G.pth'))
+                    torch.save(self.D, os.path.join(args.savedir, 'D.pth'))
 
     def predict(self, x):
         return torch.max(self.D(Variable(x, volatile=True), cuda=self.args.cuda), 1)[1].data
@@ -268,4 +273,7 @@ if __name__ == '__main__':
     # gan = ImprovedGAN(Generator(100), Discriminator(), MnistLabel(10), MnistUnlabel(), MnistTest(), args)
     gan = ImprovedGAN(Generator(z_dim=1), Discriminator(), args)
     gan.train()
+    # gan.test = gan.data.load_train_data_sup()
+    # print(gan.eval() / gan.test.dataset.__len__())
+    # gan.test = gan.data.load_val_data()
     print(gan.eval() / gan.test.dataset.__len__())
