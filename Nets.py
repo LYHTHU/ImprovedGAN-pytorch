@@ -133,36 +133,47 @@ class Discriminator(nn.Module):
 
        self.final = nn.Linear(self.ndf * 4 * 7 * 7, output_units, bias=False)
 
-   def forward(self, x, feature = False, cuda = False):
+   def forward(self, x, feature = False, cuda=True):
        x_f = self.main(x).view(-1, self.ndf * 4 * 7 * 7)
-       return x_f if feature else self.final(x_f)
+       if feature:
+           return x_f, self.final(x_f)
+       else:
+           return self.final(x_f)
 
 
+# TODO: Tuning args for 96*96*3
 class Generator(nn.Module):
-   def __init__(self, z_dim, ngf = 4, output_dim = 96*96*3):
+   def __init__(self, z_dim, ngf=4):
        super(Generator, self).__init__()
        self.z_dim = z_dim
+
+       # w, h = z_dim, z_dim
        self.main = nn.Sequential(
            # input is Z, going into a convolution
-           nn.ConvTranspose2d(z_dim, ngf * 4, 4, 1, 0, bias=False),
+           nn.ConvTranspose2d(z_dim, ngf * 4, kernel_size=7, stride=2, bias=False),
            nn.BatchNorm2d(ngf * 4),
            nn.ReLU(True),
-           # state size. (ngf*8) x 4 x 4
-           nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
+           # state size. (ngf*4) x ((32-1)*2+1 + 7 - 1 = 69) x (69)
+           nn.ConvTranspose2d(ngf * 4, ngf * 2, kernel_size=9, stride=1, bias=False),
            nn.BatchNorm2d(ngf * 2),
            nn.ReLU(True),
-           # state size. (ngf*4) x 8 x 8
-           nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
+           # state size. (ngf*4) x (69-1)*1+1 + 9 -1 = 78) x (78)
+           nn.ConvTranspose2d(ngf * 2, ngf, kernel_size=11, stride=1, bias=False),
            nn.BatchNorm2d(ngf),
            nn.ReLU(True),
-           # state size. (ngf*2) x 16 x 16
-           nn.ConvTranspose2d(ngf, 1, 4, 2, 3, bias=False),
-           # state size. (ngf) x 32 x 32
+           # state size. (ngf*2) x 87 x 87
+           nn.ConvTranspose2d(ngf, 3, kernel_size=10, stride=1, bias=False),
+           # state size. (ngf) x 96 x 96
            nn.Sigmoid()
        )
 
-   def forward(self, batch_size, cuda = False):
-       x = Variable(torch.rand(batch_size, self.z_dim, 1, 1), requires_grad = False, volatile = not self.training)
+   def forward(self, batch_size, cuda = True):
+       x = Variable(torch.rand(batch_size, self.z_dim, 32, 32), requires_grad = False, volatile = not self.training)
+
+       # print("Generator in_size = ", x.size())
+
        if cuda:
            x = x.cuda()
-       return self.main(x)
+       x = self.main(x)
+       # print("Generator size = ", x.size())
+       return x

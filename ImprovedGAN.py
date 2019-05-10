@@ -23,7 +23,7 @@ import time
 class ImprovedGAN(object):
     # def __init__(self, G, D, labeled, unlabeled, test, args):
     def __init__(self, G, D, args):
-        if os.path.exists(args.savedir):
+        if os.path.exists(os.path.join(args.savedir, 'G.pth')) and os.path.exists(os.path.join(args.savedir, 'D.pth')):
             if args.load_models:
                 print('Loading model from ' + args.savedir)
                 self.G = torch.load(os.path.join(args.savedir, 'G.pth'))
@@ -89,7 +89,7 @@ class ImprovedGAN(object):
     def trainG(self, x_unlabel):
         fake = self.G(x_unlabel.size()[0], cuda = self.args.cuda).view(x_unlabel.size())
 #        fake.retain_grad()
-        mom_gen, output_fake = self.D(fake, feature=True, cuda=self.args.cuda)
+        mom_gen, output_fake = self.D(x=fake, feature=True, cuda=self.args.cuda)
         mom_unlabel, _ = self.D(Variable(x_unlabel), feature=True, cuda=self.args.cuda)
         mom_gen = torch.mean(mom_gen, dim=0)
         mom_unlabel = torch.mean(mom_unlabel, dim=0)
@@ -169,9 +169,9 @@ class ImprovedGAN(object):
                     with torch.no_grad():
                         self.writer.add_histogram('real_feature', self.D(Variable(x), cuda=self.args.cuda, feature = True)[0], gn)
 
-                    self.writer.add_histogram('fake_feature', self.D(self.G(self.args.batch_size, cuda = self.args.cuda), cuda=self.args.cuda, feature = True)[0], gn)
-                    self.writer.add_histogram('fc3_bias', self.G.fc3.bias, gn)
-                    self.writer.add_histogram('D_feature_weight', self.D.layers[-1].weight, gn)
+                    # self.writer.add_histogram('fake_feature', self.D(self.G(self.args.batch_size, cuda = self.args.cuda), cuda=self.args.cuda, feature = True)[0], gn)
+                    # self.writer.add_histogram('fc3_bias', self.G.fc3.bias, gn)
+                    # self.writer.add_histogram('D_feature_weight', self.D.layers[-1].weight, gn)
                     # self.writer.add_histogram('D_feature_bias', self.D.layers[-1].bias, gn)
                     # print('Eval: correct %d/%d, %.4f' % (self.eval(), self.test.__len__(), acc))
 
@@ -219,7 +219,7 @@ class ImprovedGAN(object):
 if __name__ == '__main__':
     torch.cuda.empty_cache()
     parser = argparse.ArgumentParser(description='PyTorch Improved GAN')
-    parser.add_argument('--load-models', type=bool, default=True,
+    parser.add_argument('--load-models', type=bool, default=False,
                         help='load trained models (default: True)')
     parser.add_argument('--batch-size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
@@ -248,6 +248,6 @@ if __name__ == '__main__':
 
     np.random.seed(args.seed)
     # gan = ImprovedGAN(Generator(100), Discriminator(), MnistLabel(10), MnistUnlabel(), MnistTest(), args)
-    gan = ImprovedGAN(Generator(14*14*16), Discriminator(), args)
+    gan = ImprovedGAN(Generator(z_dim=1), Discriminator(), args)
     gan.train()
 
