@@ -117,10 +117,7 @@ class ImprovedGAN(object):
 
         # replace the mnist with our data
 
-        label_loader = self.data.load_train_data_sup(transform=transforms.ToTensor()).__iter__()
-        unlabel_loader1 = self.data.load_train_data_mix(transform=transforms.ToTensor())
-        unlabel_loader2 = self.data.load_train_data_mix(transform=transforms.ToTensor()).__iter__()
-        # unlabel_loader2 = unlabel_loader1.__iter__()
+
 
         for epoch in range(self.args.epochs):
             self.G.train()
@@ -133,13 +130,22 @@ class ImprovedGAN(object):
             # label_loader = DataLoader(tile_labeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True,
             # num_workers=4).__iter__()
 
+            label_loader = self.data.load_train_data_sup(transform=transforms.ToTensor(), fraction=9).__iter__()
+            unlabel_loader1 = self.data.load_train_data_mix(transform=transforms.ToTensor())
+            unlabel_loader2 = self.data.load_train_data_mix(transform=transforms.ToTensor()).__iter__()
+
             loss_supervised = loss_unsupervised = loss_gen = accuracy = 0.
             batch_num = 0
             for batch_num, (unlabel1, _label1) in enumerate(unlabel_loader1):
                 #  pdb.set_trace()
 
                 unlabel2, _label2 = unlabel_loader2.next()
-                x, y = label_loader.next()
+
+                try:
+                    x, y = label_loader.next()
+                except StopIteration:
+                    label_loader = self.data.load_train_data_sup(transform=transforms.ToTensor(), fraction=9).__iter__()
+                    x, y = label_loader.next()
 
                 if args.cuda:
                     x, y, unlabel1, unlabel2 = x.cuda(), y.cuda(), unlabel1.cuda(), unlabel2.cuda()
@@ -221,8 +227,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Improved GAN')
     parser.add_argument('--load-models', type=bool, default=False,
                         help='load trained models (default: True)')
-    parser.add_argument('--batch-size', type=int, default=64, metavar='N',
-                        help='input batch size for training (default: 64)')
+    parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+                        help='input batch size for training (default: 128)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.003, metavar='LR',
