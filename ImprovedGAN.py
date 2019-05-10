@@ -52,11 +52,12 @@ class ImprovedGAN(object):
             self.D.cuda()
         # self.labeled = labeled
         # self.unlabeled = unlabeled
-        # self.test = test
         self.Doptim = optim.Adam(self.D.parameters(), lr=args.lr, betas= (args.momentum, 0.999))
         self.Goptim = optim.Adam(self.G.parameters(), lr=args.lr, betas = (args.momentum,0.999))
         self.args = args
         self.data = Data(batch_size=args.batch_size, num_workers=8)
+
+        self.test = self.data.load_val_data()
 
     def trainD(self, x_label, y, x_unlabel):
         x_label, x_unlabel, y = Variable(x_label), Variable(x_unlabel), Variable(y, requires_grad = False)
@@ -117,8 +118,6 @@ class ImprovedGAN(object):
 
         # replace the mnist with our data
 
-
-
         for epoch in range(self.args.epochs):
             self.G.train()
             self.D.train()
@@ -167,7 +166,7 @@ class ImprovedGAN(object):
                 loss_gen += lg
 
                 if (batch_num + 1) % self.args.log_interval == 0:
-                    print('Training: %d batch / %d total batches, %d Images' % (batch_num + 1, len(unlabel_loader1), (batch_num+1)*args.batch_size ))
+                    print('Training: %d batch / %d total batches, %d Images, loss: loss_supervised: %.4f; loss_unsupervised: %.4f; loss_gen: %.4f' % (batch_num + 1, len(unlabel_loader1), (batch_num+1)*args.batch_size, ll, lu, lg))
                     gn += 1
 
                     self.writer.add_scalars('loss', {'loss_supervised':ll, 'loss_unsupervised':lu, 'loss_gen':lg}, gn)
@@ -225,7 +224,7 @@ class ImprovedGAN(object):
 if __name__ == '__main__':
     torch.cuda.empty_cache()
     parser = argparse.ArgumentParser(description='PyTorch Improved GAN')
-    parser.add_argument('--load-models', type=bool, default=False,
+    parser.add_argument('--load-models', type=bool, default=True,
                         help='load trained models (default: True)')
     parser.add_argument('--batch-size', type=int, default=128, metavar='N',
                         help='input batch size for training (default: 128)')
@@ -256,4 +255,3 @@ if __name__ == '__main__':
     # gan = ImprovedGAN(Generator(100), Discriminator(), MnistLabel(10), MnistUnlabel(), MnistTest(), args)
     gan = ImprovedGAN(Generator(z_dim=1), Discriminator(), args)
     gan.train()
-
