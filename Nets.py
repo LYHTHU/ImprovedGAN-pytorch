@@ -113,17 +113,17 @@ class Discriminator(nn.Module):
        super(Discriminator, self).__init__()
        self.ndf = ndf
        self.main = nn.Sequential(
-           # state size. (nc) x 96 x 96
-           nn.Conv2d(in_channels=nc, out_channels=ndf, kernel_size=7, stride=2, bias=False),
-           nn.BatchNorm2d(ndf),
+           # state size. (nc) x 32 x 32
+           nn.Conv2d(in_channels=nc, out_channels=2*ndf, kernel_size=3, stride=2, bias=False),
+           nn.BatchNorm2d(2*ndf),
 
            nn.LeakyReLU(0.2, inplace=True),
-           # state size. (ndf) x 45 x 45
-           nn.Conv2d(ndf, ndf * 2, 7, 2, bias=False),
+           # state size. (ndf) x 15 x 15
+           nn.Conv2d(2*ndf, ndf * 2, 5, 1, bias=False),
            nn.BatchNorm2d(ndf * 2),
            nn.LeakyReLU(0.2, inplace=True),
-           # state size. (ndf*2) x 20 x 20
-           nn.Conv2d(ndf * 2, ndf * 4, 7, 2, bias=False),
+           # state size. (ndf*2) x 11 x 11
+           nn.Conv2d(ndf * 2, ndf * 4, 5, 1, bias=False),
            nn.BatchNorm2d(ndf * 4),
            nn.LeakyReLU(0.2, inplace=True),
            # state size. (ndf*4) x 7 x 7
@@ -136,12 +136,15 @@ class Discriminator(nn.Module):
    def forward(self, x, feature=False, cuda=True):
        x_f = self.main(x).view(-1, self.ndf * 4 * 7 * 7)
        if feature:
-           return x_f, self.final(x_f)
+           return x_f, F.sigmoid(self.final(x_f))
        else:
-           return self.final(x_f)
+           return F.sigmoid(self.final(x_f))
 
 
 # TODO: Tuning args for 96*96*3
+# TODO: Tuning args for 32*32*3
+
+
 class Generator(nn.Module):
    def __init__(self, z_dim, ngf=4):
        super(Generator, self).__init__()
@@ -150,25 +153,25 @@ class Generator(nn.Module):
        # w, h = z_dim, z_dim
        self.main = nn.Sequential(
            # input is Z, going into a convolution
-           nn.ConvTranspose2d(z_dim, ngf, kernel_size=7, stride=2, bias=False),
+           nn.ConvTranspose2d(z_dim, ngf, kernel_size=5, stride=1, bias=False),
            nn.BatchNorm2d(ngf),
            nn.ReLU(True),
            # state size. (ngf*4) x ((32-1)*2+1 + 7 - 1 = 69) x (69)
-           nn.ConvTranspose2d(ngf, ngf * 2, kernel_size=9, stride=1, bias=False),
+           nn.ConvTranspose2d(ngf, ngf * 2, kernel_size=5, stride=1, bias=False),
            nn.BatchNorm2d(ngf * 2),
            nn.ReLU(True),
-           # state size. (ngf*4) x (69-1)*1+1 + 9 -1 = 78) x (78)
-           nn.ConvTranspose2d(ngf * 2, ngf, kernel_size=11, stride=1, bias=False),
+           # state size. (ngf*4) x (69-1)*1+1 + 9 -1 = 77) x (77)
+           nn.ConvTranspose2d(ngf * 2, ngf, kernel_size=3, stride=1, bias=False),
            nn.BatchNorm2d(ngf),
            nn.ReLU(True),
            # state size. (ngf*2) x 87 x 87
-           nn.ConvTranspose2d(ngf, 3, kernel_size=10, stride=1, bias=False),
+           nn.ConvTranspose2d(ngf, 3, kernel_size=3, stride=1, bias=False),
            # state size. (ngf) x 96 x 96
            nn.Sigmoid()
        )
 
    def forward(self, batch_size, cuda = True):
-       x = Variable(torch.rand(batch_size, self.z_dim, 32, 32), requires_grad = False, volatile = not self.training)
+       x = Variable(torch.rand(batch_size, self.z_dim, 20, 20), requires_grad = False, volatile = not self.training)
 
        # print("Generator in_size = ", x.size())
 

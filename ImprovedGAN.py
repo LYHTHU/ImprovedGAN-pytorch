@@ -53,15 +53,15 @@ class ImprovedGAN(object):
         # self.labeled = labeled
         # self.unlabeled = unlabeled
         self.Doptim = optim.Adam(self.D.parameters(), lr=args.lr, betas= (args.momentum, 0.999))
-        self.Goptim = optim.Adam(self.G.parameters(), lr=args.lr, betas = (args.momentum,0.999))
+        self.Goptim = optim.Adam(self.G.parameters(), lr=2*args.lr, betas = (args.momentum,0.999))
         # self.Goptim = optim.Adam(self.G.parameters(), lr=args.lr*5, betas=(args.momentum, 0.999))
         self.args = args
         self.data = Data(batch_size=args.batch_size, num_workers=8)
 
-        self.test = self.data.load_val_data()
+        self.test = self.data.load_val_data(transform=transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()]))
 
     def trainD(self, x_label, y, x_unlabel):
-        x_label, x_unlabel, y = Variable(x_label), Variable(x_unlabel), Variable(y, requires_grad = False)
+        x_label, x_unlabel, y = Variable(x_label), Variable(x_unlabel), Variable(y, requires_grad=False)
         if self.args.cuda:
             x_label, x_unlabel, y = x_label.cuda(), x_unlabel.cuda(), y.cuda()
 
@@ -69,7 +69,7 @@ class ImprovedGAN(object):
 
         logz_label, logz_unlabel, logz_fake = log_sum_exp(output_label), log_sum_exp(output_unlabel), log_sum_exp(output_fake) # log ∑e^x_i
 
-        prob_label = torch.gather(output_label, 1, y.unsqueeze(1)) # log e^x_label = x_label
+        prob_label = torch.gather(output_label, 1, y.unsqueeze(1))  # log e^x_label = x_label
 
         loss_supervised = -torch.mean(prob_label) + torch.mean(logz_label)
 
@@ -119,7 +119,7 @@ class ImprovedGAN(object):
 
         # replace the mnist with our data
         last_acc = 0
-        for epoch in range(self.args.epochs):
+        for epoch in range(1, self.args.epochs + 1):
             self.G.train()
             self.D.train()
             start = time.time()
@@ -130,9 +130,9 @@ class ImprovedGAN(object):
             # label_loader = DataLoader(tile_labeled, batch_size=self.args.batch_size, shuffle=True, drop_last=True,
             # num_workers=4).__iter__()
 
-            label_loader = self.data.load_train_data_sup(transform=transforms.ToTensor(), fraction=9).__iter__()
-            unlabel_loader1 = self.data.load_train_data_mix(transform=transforms.ToTensor())
-            unlabel_loader2 = self.data.load_train_data_mix(transform=transforms.ToTensor()).__iter__()
+            label_loader = self.data.load_train_data_sup(transform=transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()])).__iter__()
+            unlabel_loader1 = self.data.load_train_data_mix(transform=transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()]))
+            unlabel_loader2 = self.data.load_train_data_mix(transform=transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()])).__iter__()
 
             loss_supervised = loss_unsupervised = loss_gen = accuracy = 0.
             batch_num = 0
@@ -144,7 +144,7 @@ class ImprovedGAN(object):
                 try:
                     x, y = label_loader.next()
                 except StopIteration:
-                    label_loader = self.data.load_train_data_sup(transform=transforms.ToTensor(), fraction=9).__iter__()
+                    label_loader = self.data.load_train_data_sup(transform=transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()])).__iter__()
                     x, y = label_loader.next()
 
                 if args.cuda:
@@ -163,6 +163,7 @@ class ImprovedGAN(object):
                 if epoch > 1 and lg > 1:
                     # pdb.set_trace()
                     lg = self.trainG(unlabel2)
+                    lg = self.trainG(unlabel2)
 
                 loss_gen += lg
 
@@ -170,15 +171,20 @@ class ImprovedGAN(object):
                     print('Training: %d batch / %d total batches, %d Images, loss: loss_supervised: %.4f; loss_unsupervised: %.4f; loss_gen: %.4f' % (batch_num + 1, len(unlabel_loader1), (batch_num+1)*args.batch_size, ll, lu, lg))
                     gn += 1
 
-                    self.writer.add_scalars('loss', {'loss_supervised':ll, 'loss_unsupervised':lu, 'loss_gen':lg}, gn)
+                    self.writer.add_scalars('loss', {'loss_supervised': ll, 'loss_unsupervised': lu, 'loss_gen': lg}, gn)
 
                     with torch.no_grad():
                         self.writer.add_histogram('real_feature', self.D(Variable(x), cuda=self.args.cuda, feature = True)[0], gn)
 
-                    # self.writer.add_histogram('fake_feature', self.D(self.G(self.args.batch_size, cuda = self.args.cuda), cuda=self.args.cuda, feature = True)[0], gn)
+                    # self.writer.add_histogram('fake_feature', self.D(self.G(self.args.batch_size,
+                    # cuda = self.args.cuda), cuda=self.args.cuda, feature = True)[0], gn)
+
                     # self.writer.add_histogram('fc3_bias', self.G.fc3.bias, gn)
+
                     # self.writer.add_histogram('D_feature_weight', self.D.layers[-1].weight, gn)
+
                     # self.writer.add_histogram('D_feature_bias', self.D.layers[-1].bias, gn)
+
                     # print('Eval: correct %d/%d, %.4f' % (self.eval(), self.test.dataset.__len__(), acc))
 
                     self.D.train()
@@ -191,11 +197,11 @@ class ImprovedGAN(object):
 
             end = time.time()
 
-            print("Iteration %d, loss_supervised = %.4f, loss_unsupervised = %.4f, loss_gen = %.4f train acc = %.4f; Using time %.2f min" % (epoch, loss_supervised, loss_unsupervised, loss_gen, accuracy, (end-start)/60))
+            print("Epoch %d, loss_supervised = %.4f, loss_unsupervised = %.4f, loss_gen = %.4f train acc = %.4f; Using time %.2f min" % (epoch, loss_supervised, loss_unsupervised, loss_gen, accuracy, (end-start)/60))
 
             sys.stdout.flush()
 
-            if (epoch + 1) % self.args.eval_interval == 0:
+            if epoch  % self.args.eval_interval == 0:
                 num_correct = self.eval()
                 print("Eval: correct %d / %d" % (num_correct, self.test.dataset.__len__()))
                 acc = num_correct / len(self.test.dataset)
@@ -226,6 +232,8 @@ class ImprovedGAN(object):
                 if self.args.cuda:
                     data, target = data.cuda(), target.cuda()
                     pred = self.predict(data)
+                    # print("Pred: ")
+                    # print(pred)
                     num_correct += pred.eq(target.data.view_as(pred)).cpu().sum().item()
 
         print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
@@ -248,8 +256,8 @@ if __name__ == '__main__':
                         help='input batch size for training (default: 128)')
     parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.003, metavar='LR',
-                        help='learning rate (default: 0.003)')
+    parser.add_argument('--lr', type=float, default=0.0003, metavar='LR',
+                        help='learning rate (default: 0.0003)')
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
                         help='SGD momentum (default: 0.5)')
     parser.add_argument('--cuda', action='store_true', default=True,
@@ -272,8 +280,13 @@ if __name__ == '__main__':
     np.random.seed(args.seed)
     # gan = ImprovedGAN(Generator(100), Discriminator(), MnistLabel(10), MnistUnlabel(), MnistTest(), args)
     gan = ImprovedGAN(Generator(z_dim=1), Discriminator(), args)
-    gan.train()
-    # gan.test = gan.data.load_train_data_sup()
-    # print(gan.eval() / gan.test.dataset.__len__())
-    # gan.test = gan.data.load_val_data()
+
+    train_mode = True
+    if train_mode:
+        gan.train()
+    else:
+        gan.test = gan.data.load_train_data_sup(transform=transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()]))
+        print(gan.eval() / gan.test.dataset.__len__())
+        gan.test = gan.data.load_val_data(transform=transforms.Compose([transforms.Resize((32, 32)), transforms.ToTensor()]))
+
     print(gan.eval() / gan.test.dataset.__len__())
